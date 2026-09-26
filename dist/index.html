@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Convert YNAB transaction exports into validated Money Manager import files." />
+    <meta name="theme-color" content="#ed4b46" />
+    <meta name="referrer" content="no-referrer" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src https://api.frankfurter.dev; object-src 'none'; base-uri 'none'; form-action 'self'" />
+    <title>YNAB to Money Manager</title>
+    <script>
+      (() => {
+        const params = new URLSearchParams(location.search);
+        const design = params.get("design");
+        const flow = params.get("flow");
+        document.documentElement.dataset.design = ["coral", "editorial", "nordic", "graphite"].includes(design) ? design : "editorial";
+        document.documentElement.dataset.flow = ["guided", "checklist", "compact"].includes(flow) ? flow : "compact";
+      })();
+    </script>
+    <link rel="icon" type="image/png" href="./assets/ledger-bridge-logo-256.png" />
+    <link rel="stylesheet" href="./styles.css?v=20260926-14" />
+  </head>
+  <body>
+    <main class="workspace">
+      <aside class="steps" aria-label="Conversion steps">
+        <p class="eyebrow">Conversion</p>
+        <nav>
+          <a class="step is-active" href="#upload"><span>1</span><b>Files</b><small>Add YNAB export</small></a>
+          <a class="step" href="#configure"><span>2</span><b>Match</b><small>Connect your names</small></a>
+          <a class="step" href="#review"><span>3</span><b>Check</b><small>Fix missing details</small></a>
+          <a class="step" href="#export"><span>4</span><b>Download</b><small>Get import files</small></a>
+        </nav>
+        <button class="settings-card" id="open-settings-sidebar" type="button">
+          <p>Settings</p>
+          <strong>Conversion settings</strong>
+          <small>Formats and Money Manager lists <span aria-hidden="true">→</span></small>
+        </button>
+      </aside>
+
+      <section class="content">
+        <section class="tool-intro" aria-labelledby="tool-name">
+          <img src="./assets/ledger-bridge-logo-256.png" alt="" aria-hidden="true" />
+          <div><h1 id="tool-name">YNAB <span class="title-connector">to</span> Money Manager</h1><p>Convert a YNAB transaction export into a clean file ready for Money Manager.</p></div>
+        </section>
+
+        <section class="panel" id="upload" aria-labelledby="upload-title">
+          <div class="panel-heading">
+            <div class="section-title"><span class="section-number">1</span><h2 id="upload-title">Add your YNAB transactions</h2></div>
+            <div class="inline-actions"><div class="run-state" id="run-state"><span></span>Waiting for a file</div><button class="text-button" id="load-demo" type="button">Load a small example</button></div>
+          </div>
+          <div class="step-help"><strong>What you need</strong><p>Choose a transaction-level CSV or TSV from YNAB. This tool will convert the selected dates into a file you can import into Money Manager. The other two files are optional helpers.</p></div>
+
+          <div class="upload-grid">
+            <label class="dropzone" id="ynab-dropzone">
+              <input id="ynab-file" type="file" accept=".csv,.tsv,.txt,text/csv,text/tab-separated-values" />
+              <span class="file-icon" aria-hidden="true">Y</span>
+              <strong>YNAB transactions</strong>
+              <span>Drop a CSV or TSV, or choose a file</span>
+              <small>Required · use a transaction-level export</small>
+            </label>
+            <label class="dropzone is-optional" id="income-dropzone">
+              <input id="income-reference-file" type="file" accept=".csv,.tsv,.txt,text/csv,text/tab-separated-values" />
+              <span class="file-icon income" aria-hidden="true">I</span>
+              <strong>Income &amp; Expense report</strong>
+              <span>Drop the Reflect CSV or TSV</span>
+              <small>Optional · warns when transaction-level income is missing</small>
+            </label>
+            <label class="dropzone is-optional" id="mm-dropzone">
+              <input id="mm-file" type="file" accept=".xlsx,.xls,.csv,.tsv" />
+              <span class="file-icon mm" aria-hidden="true">M</span>
+              <strong>Money Manager export</strong>
+              <span>Drop an XLSX, CSV or TSV</span>
+              <small>Optional · finds names used in that export</small>
+            </label>
+          </div>
+
+          <details class="help-guide" open>
+            <summary>Where to get these export files</summary>
+            <div class="help-guide-grid">
+              <article>
+                <h3>YNAB transactions</h3>
+                <ol>
+                  <li>Open YNAB on a computer and select <b>Reflect → Spending Breakdown</b>.</li>
+                  <li>Choose the accounts, categories and date range, then select <b>Export</b> twice.</li>
+                  <li>Upload the downloaded file whose name ends in <b>-transactions.csv</b> or <b>.tsv</b>.</li>
+                </ol>
+                <p>The other Spending Breakdown file contains totals and is not the transaction source.</p>
+                <a href="https://support.ynab.com/en_us/how-to-export-reflection-data-Bykou09" target="_blank" rel="noreferrer">Read YNAB’s export guide ↗</a>
+              </article>
+              <article>
+                <h3>Income and Money Manager references</h3>
+                <ul>
+                  <li>For an income check, export <b>Reflect → Income v Expense</b> from YNAB.</li>
+                  <li>From Money Manager, use <b>Export data to Excel</b>. Choose data that includes every account and category you intend to map.</li>
+                  <li>This Money Manager file only supplies exact names; you can also enter missing names in Settings.</li>
+                </ul>
+                <a href="https://help.realbyteapps.com/hc/en-us/articles/360043020434-How-to-backup-and-restore-data" target="_blank" rel="noreferrer">Money Manager backup guide ↗</a>
+              </article>
+            </div>
+          </details>
+
+          <div class="detected-files" id="detected-files" hidden></div>
+
+          <div class="date-row">
+            <p class="date-help"><strong>Dates to include</strong><span>Only YNAB transactions between these two dates will be added to the Money Manager import.</span></p>
+            <p class="date-error" id="date-range-error" role="alert" hidden>The start date must be on or before the end date.</p>
+            <div>
+              <label for="date-from">From</label>
+              <input id="date-from" type="date" />
+            </div>
+            <div>
+              <label for="date-to">To</label>
+              <input id="date-to" type="date" />
+            </div>
+            <button class="button button-primary" id="continue-config" type="button" disabled>Next</button>
+          </div>
+        </section>
+
+        <section class="panel" id="configure" aria-labelledby="configure-title">
+          <div class="panel-heading">
+            <div class="section-title"><span class="section-number">2</span><h2 id="configure-title">Configure mappings</h2></div>
+            <button class="button button-quiet" id="open-settings" type="button">Settings</button>
+          </div>
+          <div class="step-help"><strong>What to do</strong><p>For every YNAB account and category, choose its matching name in Money Manager. Open Settings only when you need to change the formats or available Money Manager names.</p></div>
+
+          <div class="mapping-section">
+            <div class="subheading"><div><h3>Accounts</h3><p>Choose the exact Money Manager account and source currency.</p></div><span class="counter" id="account-counter">0 mapped</span></div>
+            <div class="mapping-table" id="account-mappings"><div class="empty-state">Load a YNAB file to discover accounts.</div></div>
+          </div>
+
+          <div class="mapping-section">
+            <div class="subheading"><div><h3>Categories</h3><p>Several YNAB categories may point to the same Money Manager category.</p></div><span class="counter" id="category-counter">0 mapped</span></div>
+            <div class="mapping-toolbar">
+              <input id="category-search" type="search" placeholder="Filter categories" aria-label="Filter categories" />
+              <select id="bulk-category-action" aria-label="Set action for visible categories"><option value="">Set visible rows…</option><option value="expense">Expense</option><option value="income">Income</option><option value="manual">Manual review</option><option value="ignore">Ignore</option></select>
+            </div>
+            <div class="mapping-table" id="category-mappings"><div class="empty-state">Load a YNAB file to discover categories.</div></div>
+          </div>
+
+          <div class="mapping-section" id="transfer-section" hidden>
+            <div class="subheading"><div><h3>Transfers</h3><p>Money Manager needs the source account and destination account.</p></div></div>
+            <div class="mapping-table" id="transfer-mappings"></div>
+          </div>
+
+          <div class="mapping-section">
+            <div class="subheading"><div><h3>Payee rules</h3><p>Specific payees can override a broader category mapping.</p></div><button class="text-button" id="add-payee-rule" type="button">Add rule</button></div>
+            <div class="mapping-table" id="payee-rules"><div class="empty-state">No payee-specific rules.</div></div>
+          </div>
+
+          <div class="save-bar"><span id="save-state">Changes save automatically in this browser.</span><button class="button button-primary" id="continue-review" type="button">Review transactions</button></div>
+        </section>
+
+        <section class="panel" id="review" aria-labelledby="review-title">
+          <div class="panel-heading">
+            <div class="section-title"><span class="section-number">3</span><h2 id="review-title">Review transactions</h2></div>
+            <div class="inline-actions">
+              <button class="button button-quiet" id="add-manual-transfer" type="button" hidden>Add missing transfer</button>
+              <button class="button button-quiet" id="fetch-rates" type="button" hidden>Get exchange rates</button>
+            </div>
+          </div>
+          <div class="step-help"><strong>What to check</strong><p>Only transactions marked <b>Needs your input</b> stop the full export. Open those rows and complete the missing account, category, transfer destination or exchange rate. Everything marked <b>Ready</b> can be imported.</p></div>
+          <div class="summary-strip">
+            <div><span class="status-dot ready"></span><strong id="ready-count">0</strong><small>Ready to export</small></div>
+            <div><span class="status-dot review"></span><strong id="review-count">0</strong><small>Needs your input</small></div>
+            <div><strong id="included-total">0.00</strong><small id="included-currency">Source total</small></div>
+          </div>
+          <div class="review-controls">
+            <div class="segmented" role="group" aria-label="Transaction status"><button class="is-active" data-review-filter="all">All</button><button data-review-filter="review">Needs your input</button><button data-review-filter="ready">Ready</button></div>
+            <div class="status-filters"><label><input type="checkbox" value="Reconciled" checked />Reconciled</label><label><input type="checkbox" value="Cleared" checked />Cleared</label><label><input type="checkbox" value="Uncleared" checked />Uncleared</label></div>
+          </div>
+          <div class="notice" id="review-notice" hidden></div>
+          <div class="table-scroll">
+            <table class="review-table">
+              <thead><tr><th>Date</th><th>Source</th><th>Amount</th><th>Money Manager result</th><th>Status</th><th></th></tr></thead>
+              <tbody id="review-rows"><tr><td colspan="6" class="empty-state">Load and configure a YNAB file to review transactions.</td></tr></tbody>
+            </table>
+          </div>
+          <div class="step-footer"><span>When nothing needs your input, the full import becomes available.</span><button class="button button-primary" id="continue-export" type="button" disabled>Continue to download</button></div>
+        </section>
+
+        <section class="panel" id="export" aria-labelledby="export-title">
+          <div class="panel-heading"><div class="section-title"><span class="section-number">4</span><h2 id="export-title">Export</h2></div><span class="export-readiness" id="export-readiness">No transactions ready</span></div>
+          <div class="step-help"><strong>How to finish</strong><p>Download the five-row test first and import it into Money Manager. If it looks correct, delete that test import and use the complete file.</p></div>
+          <div class="export-grid">
+            <div class="export-card primary-export">
+              <div class="export-icon">TSV</div>
+              <div><h3>Money Manager import</h3><p>UTF-8 tab-separated file with exact mapped names and sub-currency columns.</p></div>
+              <button class="button button-primary" id="download-tsv" type="button" disabled>Download import.tsv</button>
+            </div>
+            <div class="export-card">
+              <div><h3>Test import</h3><p>Download up to five ready rows before importing the full range.</p></div>
+              <button class="button button-quiet" id="download-test" type="button" disabled>Download test file</button>
+            </div>
+          </div>
+          <details class="help-guide import-guide" open>
+            <summary>How to import the file into Money Manager</summary>
+            <ol class="import-steps">
+              <li><span>1</span><div><strong>Back up Money Manager first</strong><p>Create a current backup before importing or deleting any test rows.</p></div></li>
+              <li><span>2</span><div><strong>Prepare Money Manager</strong><p>Create the mapped accounts and categories in the app first. If the file uses sub-currencies, add them under <b>More → Configuration → Sub Currency Setting</b>.</p></div></li>
+              <li><span>3</span><div><strong>Connect your phone to the computer</strong><p>In Finder on a current Mac, or iTunes on Windows/older macOS, open file sharing for Money Manager and copy <b>import.tsv</b> into <b>MoneyManager/import</b>.</p></div></li>
+              <li><span>4</span><div><strong>Import on the phone</strong><p>Open <b>Money Manager → More → Backup</b>, select <b>import.tsv</b>, and confirm the import.</p></div></li>
+              <li><span>5</span><div><strong>Test before the full import</strong><p>Import the five-row test first. Check the result, delete those test rows, then import the complete file.</p></div></li>
+            </ol>
+            <div class="guide-links"><a href="https://help.realbyteapps.com/hc/en-us/articles/360043020434-How-to-backup-and-restore-data" target="_blank" rel="noreferrer">Backup instructions ↗</a><a href="https://help.realbyteapps.com/hc/en-us/articles/21691709364761-How-to-import-bulk-data-by-Excel-file-with-sub-currencies" target="_blank" rel="noreferrer">Sub-currency import instructions ↗</a></div>
+          </details>
+        </section>
+
+        <footer class="app-footer">
+          <span>Made with <span class="footer-heart" aria-label="love">♥</span> and Codex</span>
+          <a href="https://github.com/jacopobr/ynab-to-money-manager" target="_blank" rel="noreferrer">View on GitHub ↗</a>
+        </footer>
+      </section>
+    </main>
+
+    <dialog id="settings-dialog" class="wide-dialog settings-dialog">
+      <form method="dialog" class="dialog-card">
+        <div class="dialog-heading"><div><p class="eyebrow">Configuration</p><h2>Settings</h2><p>Your conversion settings are saved automatically in this browser.</p></div><button class="icon-button" value="cancel" aria-label="Close settings">×</button></div>
+        <section class="settings-section" aria-labelledby="format-settings-title">
+          <div class="settings-section-heading"><div><h3 id="format-settings-title">Dates and currency</h3><p>Tell the converter how to read YNAB and format the Money Manager file.</p></div></div>
+          <div class="settings-grid">
+            <div class="setting-input-date"><label for="input-date-format">YNAB date</label><select id="input-date-format"><option value="DMY">DD/MM/YYYY</option><option value="MDY">MM/DD/YYYY</option><option value="YMD">YYYY-MM-DD</option></select></div>
+            <div class="setting-base-currency"><label for="base-currency">Base currency</label><input id="base-currency" value="EUR" maxlength="3" pattern="[A-Za-z]{3}" title="Use a three-letter currency code, such as EUR" /></div>
+            <div class="setting-output-date"><label for="date-format">Output date</label><select id="date-format"><option value="DMY">DD/MM/YYYY</option><option value="MDY">MM/DD/YYYY</option><option value="YMD">YYYY-MM-DD</option></select></div>
+            <div class="setting-output-decimals"><label for="decimal-separator">Output decimals</label><select id="decimal-separator"><option value=",">Comma · 123,45</option><option value=".">Point · 123.45</option></select></div>
+          </div>
+        </section>
+        <section class="settings-section" aria-labelledby="mapping-data-title">
+          <div class="settings-section-heading"><div><h3 id="mapping-data-title">Money Manager names</h3><p>These exact names appear in the mapping menus. Add one per line; account names are automatically excluded from categories.</p></div></div>
+          <div class="catalog-grid settings-catalog-grid">
+            <div><label for="settings-catalog-accounts">Accounts</label><textarea id="settings-catalog-accounts" rows="7" placeholder="Checking account&#10;Savings account"></textarea></div>
+            <div><label for="settings-catalog-categories">Categories</label><textarea id="settings-catalog-categories" rows="7" placeholder="Food&#10;Transport"></textarea></div>
+            <div><label for="settings-catalog-subcategories">Subcategories</label><textarea id="settings-catalog-subcategories" rows="7" placeholder="Optional"></textarea></div>
+          </div>
+          <div class="settings-actions settings-save-row"><button class="button button-primary" id="save-settings-catalog" type="button">Save Money Manager names</button></div>
+        </section>
+        <section class="settings-section" aria-labelledby="backup-settings-title">
+          <div class="settings-section-heading"><div><h3 id="backup-settings-title">Backup and restore</h3><p>Download your configuration or restore it in another browser.</p></div></div>
+          <div class="settings-actions">
+            <button class="button button-quiet" id="export-profile" type="button">Back up configuration</button>
+            <label class="button button-quiet file-button">Restore configuration<input id="import-profile" type="file" accept="application/json,.json" /></label>
+          </div>
+        </section>
+        <div class="dialog-actions"><button class="button button-primary" value="cancel">Done</button></div>
+      </form>
+    </dialog>
+
+    <dialog id="add-target-dialog">
+      <form method="dialog" class="dialog-card" id="add-target-form">
+        <div class="dialog-heading"><div><p class="eyebrow">Money Manager</p><h2 id="add-target-title">Add a new name</h2><p>Use the exact name you want to see in the Money Manager import.</p></div><button class="icon-button" value="cancel" aria-label="Close">×</button></div>
+        <div><label for="add-target-name" id="add-target-label">Name</label><input id="add-target-name" autocomplete="off" /></div>
+        <div class="dialog-actions"><button class="button button-quiet" value="cancel">Cancel</button><button class="button button-primary" type="submit">Add and select</button></div>
+      </form>
+    </dialog>
+
+    <dialog id="row-dialog" class="wide-dialog">
+      <form method="dialog" class="dialog-card" id="row-form">
+        <div class="dialog-heading"><div><p class="eyebrow">Manual classification</p><h2 id="row-dialog-title">Review transaction</h2><p id="row-source-summary"></p></div><button class="icon-button" value="cancel" aria-label="Close transaction">×</button></div>
+        <input id="row-index" type="hidden" />
+        <div class="row-editor-grid">
+          <div><label for="row-date">Date</label><input id="row-date" type="date" required /></div>
+          <div><label for="row-account">Money Manager account</label><input id="row-account" list="accounts-list" /></div>
+          <div><label for="row-type">Type</label><select id="row-type"><option value="Expenses">Expenses</option><option value="Income">Income</option><option value="Transfer-Out">Transfer-Out</option><option value="Ignore">Ignore</option></select></div>
+          <div><label for="row-category">Category or destination account</label><input id="row-category" list="categories-list" /></div>
+          <div><label for="row-subcategory">Subcategory</label><input id="row-subcategory" list="subcategories-list" /></div>
+          <div><label for="row-currency">Original currency</label><input id="row-currency" maxlength="3" pattern="[A-Za-z]{3}" title="Use a three-letter currency code, such as EUR" /></div>
+          <div><label for="row-base-amount" id="row-base-amount-label">Amount in base currency</label><input id="row-base-amount" inputmode="decimal" /></div>
+          <div><label for="row-note">Note</label><input id="row-note" /></div>
+          <div><label for="row-description">Description</label><input id="row-description" /></div>
+        </div>
+        <div class="dialog-actions"><button class="button button-quiet" value="cancel">Cancel</button><button class="button button-quiet" id="save-as-category" value="default">Save as category mapping</button><button class="button button-primary" id="save-row" value="default">Apply to this row</button></div>
+      </form>
+    </dialog>
+
+    <dialog id="manual-transfer-dialog" class="wide-dialog">
+      <form method="dialog" class="dialog-card" id="manual-transfer-form">
+        <div class="dialog-heading"><div><p class="eyebrow">Missing from YNAB export</p><h2>Add a transfer</h2><p>Use this only for an internal transfer that is absent from the Spending Breakdown file.</p></div><button class="icon-button" value="cancel" aria-label="Close transfer form">×</button></div>
+        <div class="row-editor-grid">
+          <div><label for="manual-transfer-date">Date</label><input id="manual-transfer-date" type="date" required /></div>
+          <div><label for="manual-transfer-currency">Currency</label><input id="manual-transfer-currency" maxlength="3" pattern="[A-Za-z]{3}" title="Use a three-letter currency code, such as EUR" required /></div>
+          <div><label for="manual-transfer-from">From account</label><input id="manual-transfer-from" list="accounts-list" placeholder="Source account" required /></div>
+          <div><label for="manual-transfer-to">To account</label><input id="manual-transfer-to" list="accounts-list" placeholder="Destination account" required /></div>
+          <div><label for="manual-transfer-amount">Transferred amount</label><input id="manual-transfer-amount" inputmode="decimal" placeholder="0,00" required /></div>
+          <div><label for="manual-transfer-base" id="manual-transfer-base-label">Amount in base currency (optional)</label><input id="manual-transfer-base" inputmode="decimal" placeholder="Leave blank to use an exchange rate" /></div>
+          <div class="span-two"><label for="manual-transfer-note">Note (optional)</label><input id="manual-transfer-note" placeholder="Transfer between accounts" /></div>
+        </div>
+        <div class="dialog-actions"><button class="button button-quiet" value="cancel">Cancel</button><button class="button button-primary" id="save-manual-transfer" value="default">Add transfer</button></div>
+      </form>
+    </dialog>
+
+    <datalist id="accounts-list"></datalist>
+    <datalist id="categories-list"></datalist>
+    <datalist id="subcategories-list"></datalist>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script src="./vendor/xlsx.full.min.js"></script>
+    <script defer src="./app.js?v=20260926-26"></script>
+  </body>
+</html>

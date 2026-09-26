@@ -1,0 +1,54 @@
+name: Bug report
+description: Report a reproducible problem without sharing financial data
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Never attach real financial exports. Use invented, anonymized values and the smallest file that reproduces the issue.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happened?
+      description: Explain what you expected and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open…
+        2. Upload an anonymized…
+        3. Select…
+    validations:
+      required: true
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and version
+      placeholder: Firefox 142, Safari 19, Chrome 141…
+    validations:
+      required: true
+  - type: dropdown
+    id: source
+    attributes:
+      label: Data source involved
+      options:
+        - YNAB transaction export
+        - YNAB Income & Expense report
+        - Money Manager reference export
+        - Generated Money Manager import
+        - No file involved
+    validations:
+      required: true
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy confirmation
+      options:
+        - label: I removed or replaced all real financial and personal information.
+          required: true
+
